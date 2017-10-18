@@ -1389,7 +1389,19 @@ namespace bgfx { namespace gl
 	}
 
 	GLenum initTestTexture(TextureFormat::Enum _format, bool _srgb, bool _mipmaps, bool _array, GLsizei _dim)
-	{
+        {
+            if (
+                    _format != TextureFormat::R8
+                    && _format != TextureFormat::RGB8
+                    && _format != TextureFormat::RGBA8
+                    && _format != TextureFormat::BGRA8
+                    && _format != TextureFormat::RGBA16F
+                    && _format != TextureFormat::RGBA32F
+                    && _format != TextureFormat::D16
+                    && _format != TextureFormat::D32
+                    )
+                    return GL_INVALID_ENUM;
+
 		const TextureFormatInfo& tfi = s_textureFormat[_format];
 		GLenum internalFmt = _srgb
 			? tfi.m_internalFmtSrgb
