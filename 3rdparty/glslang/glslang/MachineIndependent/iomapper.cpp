@@ -201,11 +201,45 @@ public:
     const TVarLiveMap&    uniformList;
 };
 
+struct TNotifyUniformAdaptor
+{
+    EShLanguage stage;
+    TIoMapResolver& resolver;
+    inline TNotifyUniformAdaptor(EShLanguage s, TIoMapResolver& r)
+      : stage(s)
+      , resolver(r)
+    {
+    }
+    inline void operator()(TVarEntryInfo& ent)
+    {
+        resolver.notifyBinding(stage, ent.symbol->getName().c_str(), ent.symbol->getType(), ent.live);
+    }
+private:
+    TNotifyUniformAdaptor& operator=(TNotifyUniformAdaptor&);
+};
+
+struct TNotifyInOutAdaptor
+{
+    EShLanguage stage;
+    TIoMapResolver& resolver;
+    inline TNotifyInOutAdaptor(EShLanguage s, TIoMapResolver& r)
+      : stage(s)
+      , resolver(r)
+    {
+    }
+    inline void operator()(TVarEntryInfo& ent)
+    {
+        resolver.notifyInOut(stage, ent.symbol->getName().c_str(), ent.symbol->getType(), ent.live);
+    }
+private:
+    TNotifyInOutAdaptor& operator=(TNotifyInOutAdaptor&);
+};
+
 struct TResolverUniformAdaptor
 {
     TResolverUniformAdaptor(EShLanguage s, TIoMapResolver& r, TInfoSink& i, bool& e, TIntermediate& interm)
-      : resolver(r)
-      , stage(s)
+      : stage(s)
+      , resolver(r)
       , infoSink(i)
       , error(e)
       , intermediate(interm)
@@ -219,10 +253,14 @@ struct TResolverUniformAdaptor
         ent.newBinding = -1;
         ent.newSet = -1;
         ent.newIndex = -1;
-        const bool isValid = resolver.validateBinding(stage, ent.symbol->getName().c_str(), ent.symbol->getType(), ent.live);
+        const bool isValid = resolver.validateBinding(stage, ent.symbol->getName().c_str(), ent.symbol->getType(),
+                                                             ent.live);
         if (isValid) {
-            ent.newBinding = resolver.resolveBinding(stage, ent.symbol->getName().c_str(), ent.symbol->getType(), ent.live);
+            ent.newBinding = resolver.resolveBinding(stage, ent.symbol->getName().c_str(), ent.symbol->getType(),
+                                                            ent.live);
             ent.newSet = resolver.resolveSet(stage, ent.symbol->getName().c_str(), ent.symbol->getType(), ent.live);
+            ent.newLocation = resolver.resolveUniformLocation(stage, ent.symbol->getName().c_str(),
+                                                                     ent.symbol->getType(), ent.live);
 
             if (ent.newBinding != -1) {
                 if (ent.newBinding >= int(TQualifier::layoutBindingEnd)) {
@@ -260,8 +298,8 @@ private:
 struct TResolverInOutAdaptor
 {
     TResolverInOutAdaptor(EShLanguage s, TIoMapResolver& r, TInfoSink& i, bool& e, TIntermediate& interm)
-      : resolver(r)
-      , stage(s)
+      : stage(s)
+      , resolver(r)
       , infoSink(i)
       , error(e)
       , intermediate(interm)
@@ -319,7 +357,10 @@ struct TDefaultIoResolverBase : public glslang::TIoMapResolver
     int baseUboBinding;
     int baseSsboBinding;
     int baseUavBinding;
-    bool doAutoMapping;
+    std::vector<std::string> baseResourceSetBinding;
+    bool doAutoBindingMapping;
+    bool doAutoLocationMapping;
+    int nextUniformLocation;
     typedef std::vector<int> TSlotSet;
     typedef std::unordered_map<int, TSlotSet> TSlotSetMap;
     TSlotSetMap slots;
@@ -338,7 +379,12 @@ struct TDefaultIoResolverBase : public glslang::TIoMapResolver
     int reserveSlot(int set, int slot)
     {
         TSlotSet::iterator at = findSlot(set, slot);
-        slots[set].insert(at, slot);
+
+        // tolerate aliasing, by not double-recording aliases
+        // (policy about appropriateness of the alias is higher up)
+        if (at == slots[set].end() || *at != slot)
+            slots[set].insert(at, slot);
+
         return slot;
     }
 
@@ -363,16 +409,64 @@ struct TDefaultIoResolverBase : public glslang::TIoMapResolver
     {
         if (type.getQualifier().hasSet())
             return type.getQualifier().layoutSet;
+
+        // If a command line or API option requested a single descriptor set, use that (if not overrided by spaceN)
+        if (baseResourceSetBinding.size() == 1)
+            return atoi(baseResourceSetBinding[0].c_str());
+
         return 0;
     }
+    int resolveUniformLocation(EShLanguage /*stage*/, const char* /*name*/, const glslang::TType& type, bool /*is_live*/) override
+    {
+        // kick out of not doing this
+        if (!doAutoLocationMapping)
+            return -1;
 
+        // no locations added if already present, a built-in variable, a block, or an opaque
+        if (type.getQualifier().hasLocation() || type.isBuiltIn() ||
+            type.getBasicType() == EbtBlock || type.containsOpaque())
+            return -1;
+
+        // no locations on blocks of built-in variables
+        if (type.isStruct()) {
+            if (type.getStruct()->size() < 1)
+                return -1;
+            if ((*type.getStruct())[0].type->isBuiltIn())
+                return -1;
+        }
+
+        return nextUniformLocation++;
+    }
     bool validateInOut(EShLanguage /*stage*/, const char* /*name*/, const TType& /*type*/, bool /*is_live*/) override
     {
         return true;
     }
-    int resolveInOutLocation(EShLanguage /*stage*/, const char* /*name*/, const TType& /*type*/, bool /*is_live*/) override
+    int resolveInOutLocation(EShLanguage /*stage*/, const char* /*name*/, const TType& type, bool /*is_live*/) override
     {
-        return -1;
+        // kick out of not doing this
+        if (!doAutoLocationMapping)
+            return -1;
+
+        // no locations added if already present, or a built-in variable
+        if (type.getQualifier().hasLocation() || type.isBuiltIn())
+            return -1;
+
+        // no locations on blocks of built-in variables
+        if (type.isStruct()) {
+            if (type.getStruct()->size() < 1)
+                return -1;
+            if ((*type.getStruct())[0].type->isBuiltIn())
+                return -1;
+        }
+
+        // Placeholder.
+        // TODO: It would be nice to flesh this out using 
+        // intermediate->computeTypeLocationSize(type), or functions that call it like
+        // intermediate->addUsedLocation()
+        // These in turn would want the intermediate, which is not available here, but
+        // is available in many places, and a lot of copying from it could be saved if
+        // it were just available.
+        return 0;
     }
     int resolveInOutComponent(EShLanguage /*stage*/, const char* /*name*/, const TType& /*type*/, bool /*is_live*/) override
     {
@@ -382,6 +476,13 @@ struct TDefaultIoResolverBase : public glslang::TIoMapResolver
     {
         return -1;
     }
+
+    void notifyBinding(EShLanguage, const char* /*name*/, const TType&, bool /*is_live*/) override {}
+    void notifyInOut(EShLanguage, const char* /*name*/, const TType&, bool /*is_live*/) override {}
+    void endNotifications(EShLanguage) override {}
+    void beginNotifications(EShLanguage) override {}
+    void beginResolve(EShLanguage) override {}
+    void endResolve(EShLanguage) override {}
 
 protected:
     static int getLayoutSet(const glslang::TType& type) {
@@ -396,7 +497,8 @@ protected:
     }
 
     static bool isTextureType(const glslang::TType& type) {
-        return type.getBasicType() == glslang::EbtSampler && type.getSampler().isTexture();
+        return (type.getBasicType() == glslang::EbtSampler && 
+                (type.getSampler().isTexture() || type.getSampler().isSubpass()));
     }
 
     static bool isUboType(const glslang::TType& type) {
@@ -416,26 +518,8 @@ protected:
  */
 struct TDefaultIoResolver : public TDefaultIoResolverBase
 {
-    bool validateBinding(EShLanguage /*stage*/, const char* /*name*/, const glslang::TType& type, bool /*is_live*/) override
+    bool validateBinding(EShLanguage /*stage*/, const char* /*name*/, const glslang::TType& /*type*/, bool /*is_live*/) override
     {
-        if (type.getQualifier().hasBinding()) {
-            const int set = getLayoutSet(type);
-
-            if (isImageType(type))
-                return checkEmpty(set, baseImageBinding + type.getQualifier().layoutBinding);
-
-            if (isTextureType(type))
-                return checkEmpty(set, baseTextureBinding + type.getQualifier().layoutBinding);
-
-            if (isSsboType(type))
-                return checkEmpty(set, baseSsboBinding + type.getQualifier().layoutBinding);
-
-            if (isSamplerType(type))
-                return checkEmpty(set, baseSamplerBinding + type.getQualifier().layoutBinding);
-
-            if (isUboType(type))
-                return checkEmpty(set, baseUboBinding + type.getQualifier().layoutBinding);
-        }
         return true;
     }
 
@@ -446,7 +530,7 @@ struct TDefaultIoResolver : public TDefaultIoResolverBase
         if (type.getQualifier().hasBinding()) {
             if (isImageType(type))
                 return reserveSlot(set, baseImageBinding + type.getQualifier().layoutBinding);
-                
+
             if (isTextureType(type))
                 return reserveSlot(set, baseTextureBinding + type.getQualifier().layoutBinding);
 
@@ -458,7 +542,7 @@ struct TDefaultIoResolver : public TDefaultIoResolverBase
 
             if (isUboType(type))
                 return reserveSlot(set, baseUboBinding + type.getQualifier().layoutBinding);
-        } else if (is_live && doAutoMapping) {
+        } else if (is_live && doAutoBindingMapping) {
             // find free slot, the caller did make sure it passes all vars with binding
             // first and now all are passed that do not have a binding and needs one
 
@@ -532,26 +616,12 @@ u – for unordered access views (UAV)
 
 b – for constant buffer views (CBV)
    CBUFFER
+   CONSTANTBUFFER
  ********************************************************************************/
 struct TDefaultHlslIoResolver : public TDefaultIoResolverBase
 {
-    bool validateBinding(EShLanguage /*stage*/, const char* /*name*/, const glslang::TType& type, bool /*is_live*/) override
+    bool validateBinding(EShLanguage /*stage*/, const char* /*name*/, const glslang::TType& /*type*/, bool /*is_live*/) override
     {
-        if (type.getQualifier().hasBinding()) {
-            const int set = getLayoutSet(type);
-
-            if (isUavType(type))
-                return checkEmpty(set, baseUavBinding + type.getQualifier().layoutBinding);
-
-            if (isSrvType(type))
-                return checkEmpty(set, baseTextureBinding + type.getQualifier().layoutBinding);
-
-            if (isSamplerType(type))
-                return checkEmpty(set, baseSamplerBinding + type.getQualifier().layoutBinding);
-
-            if (isUboType(type))
-                return checkEmpty(set, baseUboBinding + type.getQualifier().layoutBinding);
-        }
         return true;
     }
 
@@ -571,7 +641,7 @@ struct TDefaultHlslIoResolver : public TDefaultIoResolverBase
 
             if (isUboType(type))
                 return reserveSlot(set, baseUboBinding + type.getQualifier().layoutBinding);
-        } else if (is_live && doAutoMapping) {
+        } else if (is_live && doAutoBindingMapping) {
             // find free slot, the caller did make sure it passes all vars with binding
             // first and now all are passed that do not have a binding and needs one
 
@@ -621,7 +691,9 @@ bool TIoMapper::addStage(EShLanguage stage, TIntermediate &intermediate, TInfoSi
         intermediate.getShiftUboBinding() == 0 &&
         intermediate.getShiftSsboBinding() == 0 &&
         intermediate.getShiftUavBinding() == 0 &&
+        intermediate.getResourceSetBinding().empty() &&
         intermediate.getAutoMapBindings() == false &&
+        intermediate.getAutoMapLocations() == false &&
         resolver == nullptr)
         return true;
 
@@ -651,7 +723,10 @@ bool TIoMapper::addStage(EShLanguage stage, TIntermediate &intermediate, TInfoSi
         resolverBase->baseUboBinding = intermediate.getShiftUboBinding();
         resolverBase->baseSsboBinding = intermediate.getShiftSsboBinding();
         resolverBase->baseUavBinding = intermediate.getShiftUavBinding();
-        resolverBase->doAutoMapping = intermediate.getAutoMapBindings();
+        resolverBase->baseResourceSetBinding = intermediate.getResourceSetBinding();
+        resolverBase->doAutoBindingMapping = intermediate.getAutoMapBindings();
+        resolverBase->doAutoLocationMapping = intermediate.getAutoMapLocations();
+        resolverBase->nextUniformLocation = 0;
 
         resolver = resolverBase;
     }
@@ -673,11 +748,20 @@ bool TIoMapper::addStage(EShLanguage stage, TIntermediate &intermediate, TInfoSi
     std::sort(uniformVarMap.begin(), uniformVarMap.end(), TVarEntryInfo::TOrderByPriority());
 
     bool hadError = false;
+    TNotifyInOutAdaptor inOutNotify(stage, *resolver);
+    TNotifyUniformAdaptor uniformNotify(stage, *resolver);
     TResolverUniformAdaptor uniformResolve(stage, *resolver, infoSink, hadError, intermediate);
     TResolverInOutAdaptor inOutResolve(stage, *resolver, infoSink, hadError, intermediate);
+    resolver->beginNotifications(stage);
+    std::for_each(inVarMap.begin(), inVarMap.end(), inOutNotify);
+    std::for_each(outVarMap.begin(), outVarMap.end(), inOutNotify);
+    std::for_each(uniformVarMap.begin(), uniformVarMap.end(), uniformNotify);
+    resolver->endNotifications(stage);
+    resolver->beginResolve(stage);
     std::for_each(inVarMap.begin(), inVarMap.end(), inOutResolve);
     std::for_each(outVarMap.begin(), outVarMap.end(), inOutResolve);
     std::for_each(uniformVarMap.begin(), uniformVarMap.end(), uniformResolve);
+    resolver->endResolve(stage);
 
     if (!hadError) {
         // sort by id again, so we can use lower bound to find entries

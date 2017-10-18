@@ -40,11 +40,27 @@
 namespace glslang {
     // Map the given string to an attribute enum from TAttributeType,
     // or EatNone if invalid.
-    TAttributeType TAttributeMap::attributeFromName(const TString& name)
+    TAttributeType TAttributeMap::attributeFromName(const TString& nameSpace, const TString& name)
     {
         // These are case insensitive.
         TString lowername(name);
         std::transform(lowername.begin(), lowername.end(), lowername.begin(), ::tolower);
+        TString lowernameSpace(nameSpace);
+        std::transform(lowernameSpace.begin(), lowernameSpace.end(), lowernameSpace.begin(), ::tolower);
+
+        // handle names within a namespace
+
+        if (lowernameSpace == "vk") {
+            if (lowername == "input_attachment_index")
+                return EatInputAttachment;
+            else if (lowername == "location")
+                return EatLocation;
+            else if (lowername == "binding")
+                return EatBinding;
+        } else if (lowernameSpace.size() > 0)
+            return EatNone;
+
+        // handle names with no namespace
 
         if (lowername == "allow_uav_condition")
             return EatAllow_uav_condition;
@@ -80,18 +96,20 @@ namespace glslang {
             return EatPatchConstantFunc;
         else if (lowername == "unroll")
             return EatUnroll;
+        else if (lowername == "loop")
+            return EatLoop;
         else
             return EatNone;
     }
 
     // Look up entry, inserting if it's not there, and if name is a valid attribute name
     // as known by attributeFromName.
-    TAttributeType TAttributeMap::setAttribute(const TString* name, TIntermAggregate* value)
+    TAttributeType TAttributeMap::setAttribute(const TString& nameSpace, const TString* name, TIntermAggregate* value)
     {
         if (name == nullptr)
             return EatNone;
 
-        const TAttributeType attr = attributeFromName(*name);
+        const TAttributeType attr = attributeFromName(nameSpace, *name);
 
         if (attr != EatNone)
             attributes[attr] = value;
@@ -105,6 +123,12 @@ namespace glslang {
         const auto entry = attributes.find(attr);
 
         return (entry == attributes.end()) ? nullptr : entry->second;
+    }
+
+    // True if entry exists in map (even if value is nullptr)
+    bool TAttributeMap::contains(TAttributeType attr) const
+    {
+        return attributes.find(attr) != attributes.end();
     }
 
 } // end namespace glslang
