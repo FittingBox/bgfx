@@ -1715,7 +1715,7 @@ ir_print_glsl_visitor::visit(ir_loop *ir)
 	if (emit_canonical_for(ir))
 		return;
 	
-	buffer.asprintf_append ("while (true) {\n");
+	buffer.asprintf_append ("for (int i = 0; i < 1; i += 0) {\n");
 	indentation++; previous_skipped = false;
 	foreach_in_list(ir_instruction, inst, &ir->body_instructions) {
 		indent();
