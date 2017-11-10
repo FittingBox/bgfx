@@ -900,7 +900,7 @@ namespace bgfx
 		m_key.m_view = _id;
 
 		SortKey::Enum type = SortKey::SortProgram;
-		switch (s_ctx->m_viewMode[_id])
+		switch (s_ctx->m_view[_id].m_mode)
 		{
 		case ViewMode::Sequential:      m_key.m_seq   = s_ctx->getSeqIncr(_id); type = SortKey::SortSequence; break;
 		case ViewMode::DepthAscending:  m_key.m_depth = (uint32_t)_depth;       type = SortKey::SortDepth;    break;
@@ -1578,7 +1578,12 @@ namespace bgfx
 							{                                                                         \
 								uint16_t idx = _handleAlloc.getHandleAt(ii);                          \
 								const _type& ref = _ref[idx]; BX_UNUSED(ref);                         \
-								BX_TRACE("\t%3d: %4d %s", ii, idx, ref.m_name.getPtr() );             \
+								BX_TRACE("\t%3d: %4d %s (count %d)"                                   \
+										, ii                                                          \
+										, idx                                                         \
+										, ref.m_name.getPtr()                                         \
+										, ref.m_refCount                                              \
+										);                                                            \
 							}                                                                         \
 						}                                                                             \
 					BX_MACRO_BLOCK_END
@@ -1693,13 +1698,8 @@ namespace bgfx
 		m_submit->m_perfStats.numViews = 0;
 
 		bx::memCopy(m_submit->m_viewRemap, m_viewRemap, sizeof(m_viewRemap) );
-		bx::memCopy(m_submit->m_fb, m_fb, sizeof(m_fb) );
-		bx::memCopy(m_submit->m_clear, m_clear, sizeof(m_clear) );
-		bx::memCopy(m_submit->m_rect, m_rect, sizeof(m_rect) );
-		bx::memCopy(m_submit->m_scissor, m_scissor, sizeof(m_scissor) );
 		bx::memCopy(m_submit->m_view, m_view, sizeof(m_view) );
-		bx::memCopy(m_submit->m_proj, m_proj, sizeof(m_proj) );
-		bx::memCopy(m_submit->m_viewFlags, m_viewFlags, sizeof(m_viewFlags) );
+
 		if (m_colorPaletteDirty > 0)
 		{
 			--m_colorPaletteDirty;
@@ -3743,7 +3743,7 @@ error:
 		s_ctx->setViewTransform(_id, _view, _projL, _flags, _projR);
 	}
 
-	void setViewOrder(uint8_t _id, uint8_t _num, const void* _order)
+	void setViewOrder(uint8_t _id, uint8_t _num, const uint8_t* _order)
 	{
 		BGFX_CHECK_MAIN_THREAD();
 		BX_CHECK(checkView(_id), "Invalid view id: %d", _id);
@@ -4856,7 +4856,7 @@ BGFX_C_API void bgfx_set_view_transform_stereo(uint8_t _id, const void* _view, c
 	bgfx::setViewTransform(_id, _view, _projL, _flags, _projR);
 }
 
-BGFX_C_API void bgfx_set_view_order(uint8_t _id, uint8_t _num, const void* _order)
+BGFX_C_API void bgfx_set_view_order(uint8_t _id, uint8_t _num, const uint8_t* _order)
 {
 	bgfx::setViewOrder(_id, _num, _order);
 }
