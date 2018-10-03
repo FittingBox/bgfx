@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2018 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
@@ -61,9 +61,9 @@ void toAabb(Aabb& _aabb, const Disk& _disk)
 	const float inv = 1.0f / (tmp[0]*tmp[1]*tmp[2]);
 
 	float extent[3];
-	extent[0] = _disk.m_radius * tmp[0] * bx::fsqrt( (nsq[0] + nsq[1] * nsq[2]) * inv);
-	extent[1] = _disk.m_radius * tmp[1] * bx::fsqrt( (nsq[1] + nsq[2] * nsq[0]) * inv);
-	extent[2] = _disk.m_radius * tmp[2] * bx::fsqrt( (nsq[2] + nsq[0] * nsq[1]) * inv);
+	extent[0] = _disk.m_radius * tmp[0] * bx::sqrt( (nsq[0] + nsq[1] * nsq[2]) * inv);
+	extent[1] = _disk.m_radius * tmp[1] * bx::sqrt( (nsq[1] + nsq[2] * nsq[0]) * inv);
+	extent[2] = _disk.m_radius * tmp[2] * bx::sqrt( (nsq[2] + nsq[0] * nsq[1]) * inv);
 
 	bx::vec3Sub(_aabb.m_min, _disk.m_center, extent);
 	bx::vec3Add(_aabb.m_max, _disk.m_center, extent);
@@ -88,9 +88,9 @@ void toAabb(Aabb& _aabb, const Cylinder& _cylinder)
 	const float inv = 1.0f / (tmp[0]*tmp[1]*tmp[2]);
 
 	float extent[3];
-	extent[0] = _cylinder.m_radius * tmp[0] * bx::fsqrt( (nsq[0] + nsq[1] * nsq[2]) * inv);
-	extent[1] = _cylinder.m_radius * tmp[1] * bx::fsqrt( (nsq[1] + nsq[2] * nsq[0]) * inv);
-	extent[2] = _cylinder.m_radius * tmp[2] * bx::fsqrt( (nsq[2] + nsq[0] * nsq[1]) * inv);
+	extent[0] = _cylinder.m_radius * tmp[0] * bx::sqrt( (nsq[0] + nsq[1] * nsq[2]) * inv);
+	extent[1] = _cylinder.m_radius * tmp[1] * bx::sqrt( (nsq[1] + nsq[2] * nsq[0]) * inv);
+	extent[2] = _cylinder.m_radius * tmp[2] * bx::sqrt( (nsq[2] + nsq[0] * nsq[1]) * inv);
 
 	float minP[3];
 	bx::vec3Sub(minP, _cylinder.m_pos, extent);
@@ -134,12 +134,12 @@ void toAabb(Aabb& _aabb, const void* _vertices, uint32_t _numVertices, uint32_t 
 		float xx = position[0];
 		float yy = position[1];
 		float zz = position[2];
-		min[0] = bx::fmin(xx, min[0]);
-		min[1] = bx::fmin(yy, min[1]);
-		min[2] = bx::fmin(zz, min[2]);
-		max[0] = bx::fmax(xx, max[0]);
-		max[1] = bx::fmax(yy, max[1]);
-		max[2] = bx::fmax(zz, max[2]);
+		min[0] = bx::min(xx, min[0]);
+		min[1] = bx::min(yy, min[1]);
+		min[2] = bx::min(zz, min[2]);
+		max[0] = bx::max(xx, max[0]);
+		max[1] = bx::max(yy, max[1]);
+		max[2] = bx::max(zz, max[2]);
 	}
 
 	_aabb.m_min[0] = min[0];
@@ -170,12 +170,12 @@ void toAabb(Aabb& _aabb, const float* _mtx, const void* _vertices, uint32_t _num
 		float xx = position[0];
 		float yy = position[1];
 		float zz = position[2];
-		min[0] = bx::fmin(xx, min[0]);
-		min[1] = bx::fmin(yy, min[1]);
-		min[2] = bx::fmin(zz, min[2]);
-		max[0] = bx::fmax(xx, max[0]);
-		max[1] = bx::fmax(yy, max[1]);
-		max[2] = bx::fmax(zz, max[2]);
+		min[0] = bx::min(xx, min[0]);
+		min[1] = bx::min(yy, min[1]);
+		min[2] = bx::min(zz, min[2]);
+		max[0] = bx::max(xx, max[0]);
+		max[1] = bx::max(yy, max[1]);
+		max[2] = bx::max(zz, max[2]);
 	}
 
 	_aabb.m_min[0] = min[0];
@@ -300,11 +300,11 @@ void calcMaxBoundingSphere(Sphere& _sphere, const void* _vertices, uint32_t _num
 		float zz = position[2] - center[2];
 
 		float distSq = xx*xx + yy*yy + zz*zz;
-		maxDistSq = bx::fmax(distSq, maxDistSq);
+		maxDistSq = bx::max(distSq, maxDistSq);
 	}
 
 	bx::vec3Move(_sphere.m_center, center);
-	_sphere.m_radius = bx::fsqrt(maxDistSq);
+	_sphere.m_radius = bx::sqrt(maxDistSq);
 }
 
 void calcMinBoundingSphere(Sphere& _sphere, const void* _vertices, uint32_t _numVertices, uint32_t _stride, float _step)
@@ -353,7 +353,7 @@ void calcMinBoundingSphere(Sphere& _sphere, const void* _vertices, uint32_t _num
 				center[0] += xx * radiusStep;
 				center[1] += yy * radiusStep;
 				center[2] += zz * radiusStep;
-				maxDistSq = bx::flerp(maxDistSq, distSq, _step);
+				maxDistSq = bx::lerp(maxDistSq, distSq, _step);
 
 				break;
 			}
@@ -362,7 +362,7 @@ void calcMinBoundingSphere(Sphere& _sphere, const void* _vertices, uint32_t _num
 	} while (!done);
 
 	bx::vec3Move(_sphere.m_center, center);
-	_sphere.m_radius = bx::fsqrt(maxDistSq);
+	_sphere.m_radius = bx::sqrt(maxDistSq);
 }
 
 void calcPlaneUv(const Plane& _plane, float* _udir, float* _vdir)
@@ -512,8 +512,8 @@ bool intersect(const Ray& _ray, const Aabb& _aabb, Hit* _hit)
 	float max[3];
 	bx::vec3Max(max, t0, t1);
 
-	const float tmin = bx::fmax3(min[0], min[1], min[2]);
-	const float tmax = bx::fmin3(max[0], max[1], max[2]);
+	const float tmin = bx::max(min[0], min[1], min[2]);
+	const float tmax = bx::min(max[0], max[1], max[2]);
 
 	if (tmax < 0.0f
 	||  tmin > tmax)
@@ -588,7 +588,7 @@ bool intersect(const Ray& _ray, const Disk& _disk, Hit* _hit)
 	{
 		float tmp[3];
 		bx::vec3Sub(tmp, _disk.m_center, _hit->m_pos);
-		return bx::vec3Dot(tmp, tmp) <= bx::fsq(_disk.m_radius);
+		return bx::vec3Dot(tmp, tmp) <= bx::square(_disk.m_radius);
 	}
 
 	return false;
@@ -606,7 +606,7 @@ static bool intersect(const Ray& _ray, const Cylinder& _cylinder, bool _capsule,
 	bx::vec3Cross(normal, _ray.m_dir, axis);
 
 	const float len  = bx::vec3Norm(normal, normal);
-	const float dist = bx::fabs(bx::vec3Dot(rc, normal) );
+	const float dist = bx::abs(bx::vec3Dot(rc, normal) );
 
 	if (dist > _cylinder.m_radius)
 	{
@@ -620,9 +620,9 @@ static bool intersect(const Ray& _ray, const Cylinder& _cylinder, bool _capsule,
 	bx::vec3Cross(vo, normal, axis);
 	bx::vec3Norm(vo, vo);
 
-	const float rsq   = bx::fsq(_cylinder.m_radius);
+	const float rsq   = bx::square(_cylinder.m_radius);
 	const float ddoto = bx::vec3Dot(_ray.m_dir, vo);
-	const float ss    = t0 - bx::fabs(bx::fsqrt(rsq - bx::fsq(dist) ) / ddoto);
+	const float ss    = t0 - bx::abs(bx::sqrt(rsq - bx::square(dist) ) / ddoto);
 
 	if (0.0f > ss)
 	{
@@ -746,14 +746,14 @@ bool intersect(const Ray& _ray, const Cone& _cone, Hit* _hit)
 	float ro[3];
 	bx::vec3Sub(ro, _ray.m_pos, _cone.m_end);
 
-	const float hyp    = bx::fsqrt(bx::fsq(_cone.m_radius) + bx::fsq(len) );
-	const float cosaSq = bx::fsq(len/hyp);
+	const float hyp    = bx::sqrt(bx::square(_cone.m_radius) + bx::square(len) );
+	const float cosaSq = bx::square(len/hyp);
 	const float ndoto  = bx::vec3Dot(normal, ro);
 	const float ndotd  = bx::vec3Dot(normal, _ray.m_dir);
 
-	const float aa = bx::fsq(ndotd) - cosaSq;
+	const float aa = bx::square(ndotd) - cosaSq;
 	const float bb = 2.0f * (ndotd*ndoto - bx::vec3Dot(_ray.m_dir, ro)*cosaSq);
-	const float cc = bx::fsq(ndoto) - bx::vec3Dot(ro, ro)*cosaSq;
+	const float cc = bx::square(ndoto) - bx::vec3Dot(ro, ro)*cosaSq;
 
 	float det = bb*bb - 4.0f*aa*cc;
 
@@ -762,7 +762,7 @@ bool intersect(const Ray& _ray, const Cone& _cone, Hit* _hit)
 		return hit;
 	}
 
-	det = bx::fsqrt(det);
+	det = bx::sqrt(det);
 	const float invA2 = 1.0f / (2.0f*aa);
 	const float t1 = (-bb - det) * invA2;
 	const float t2 = (-bb + det) * invA2;
@@ -854,7 +854,7 @@ bool intersect(const Ray& _ray, const Sphere& _sphere, Hit* _hit)
 	}
 
 	const float aa = bx::vec3Dot(_ray.m_dir, _ray.m_dir);
-	const float cc = bx::vec3Dot(rs, rs) - bx::fsq(_sphere.m_radius);
+	const float cc = bx::vec3Dot(rs, rs) - bx::square(_sphere.m_radius);
 
 	const float discriminant = bb*bb - aa*cc;
 
@@ -863,7 +863,7 @@ bool intersect(const Ray& _ray, const Sphere& _sphere, Hit* _hit)
 		return false;
 	}
 
-	const float sqrtDiscriminant = bx::fsqrt(discriminant);
+	const float sqrtDiscriminant = bx::sqrt(discriminant);
 	const float invA = 1.0f / aa;
 	const float tt = -(bb + sqrtDiscriminant)*invA;
 
