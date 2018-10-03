@@ -1,5 +1,5 @@
 /*
- * Copyright 2011-2017 Branimir Karadzic. All rights reserved.
+ * Copyright 2011-2018 Branimir Karadzic. All rights reserved.
  * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
  */
 
@@ -185,6 +185,7 @@ namespace bgfx { namespace gl
 
 		m_context = (void*)context;
 		[EAGLContext setCurrentContext:context];
+		[CATransaction flush];
 
 		GL_CHECK(glGenFramebuffers(1, &m_fbo) );
 		GL_CHECK(glBindFramebuffer(GL_FRAMEBUFFER, m_fbo) );

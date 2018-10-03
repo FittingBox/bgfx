@@ -23,10 +23,10 @@ struct PosColorVertex
 	static void init()
 	{
 		ms_decl
-		.begin()
-		.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-		.add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-		.end();
+			.begin()
+			.add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+			.add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+			.end();
 	}
 
 	static bgfx::VertexDecl ms_decl;
@@ -50,8 +50,13 @@ public:
 		m_debug = BGFX_DEBUG_NONE;
 		m_reset = BGFX_RESET_VSYNC;
 
-		bgfx::init(args.m_type, args.m_pciId);
-		bgfx::reset(m_width, m_height, m_reset);
+		bgfx::Init init;
+		init.type     = args.m_type;
+		init.vendorId = args.m_pciId;
+		init.resolution.width  = m_width;
+		init.resolution.height = m_height;
+		init.resolution.reset  = m_reset;
+		bgfx::init(init);
 
 		const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
 		float texelHalf = bgfx::RendererType::Direct3D9 == renderer ? 0.5f : 0.0f;
@@ -182,8 +187,9 @@ public:
 			// draw moving shape
 			static float counter = 0.0f;
 			counter += 0.01f;
-			float posX = m_width  / 2.0f + bx::fsin(counter * 3.18378f) * (m_width / 2.0f);
-			float posY = m_height / 2.0f + bx::fcos(counter) * (m_height / 2.0f);
+
+			const float posX = m_width  / 2.0f + bx::sin(counter * 3.18378f) * (m_width / 2.0f);
+			const float posY = m_height / 2.0f + bx::cos(counter) * (m_height / 2.0f);
 			m_vd.drawCircle(posX, posY, 5.0f, 10.0f);
 
 			m_vd.endFrame();
